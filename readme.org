@@ -1,0 +1,196 @@
+* Different flake variations from scratch
+:PROPERTIES:
+:ID:       fd95465e-2846-4a45-8359-15212d2a8df1
+:END:
+
+** homeage example flake with [[https://github.com/gytis-ivaskevicius/flake-utils-plus/][flake-utils-plus]] (WIP)
+
+*** current build log
+
+#+begin_src sh :eval no
+[pod@razer:~/flake-variations-from-scratch/data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup]$ nixos-rebuild build-vm --flake .#Rick && ./result/bin/run-Rick-vm  && rm -v result Rick.qcow2
+building the system configuration...
+warning: Git tree '/home/pod/flake-variations-from-scratch/data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup' is dirty
+error: undefined variable 'homeage'
+
+       at /nix/store/wmz7gymr7nwzx8fw9rrglp4kwsp1xvmw-source/hosts/Rick.nix:36:19:
+
+           35|
+           36|       imports = [ homeage.homeManagerModules.homeage ];
+             |                   ^
+           37|
+(use '--show-trace' to show detailed location information)
+#+end_src
+
+*** flake.nix
+
+#+begin_src nix :mkdirp yes :tangle data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup/flake.nix
+{
+  inputs = {
+    nixpkgs.url = "nixpkgs/nixos-unstable";
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    homeage = {
+      url = "github:jordanisaacs/homeage";
+      # Optional
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    utils.url = github:gytis-ivaskevicius/flake-utils-plus;
+  };
+
+  outputs = { self, nixpkgs, home-manager, utils, homeage, ... }@inputs:
+
+    utils.lib.mkFlake {
+      inherit self inputs;
+
+      channelsConfig.allowUnfree = true;
+
+      sharedOverlays = [
+        self.overlay
+      ];
+
+      # Modules shared between all hosts
+      hostDefaults.modules = [
+        home-manager.nixosModules.home-manager
+        ./modules/sharedConfigurationBetweenHosts.nix
+      ];
+
+      hosts.Rick.modules = [
+        ./hosts/Rick.nix
+      ];
+
+      overlay = import ./overlays;
+
+    };
+
+}
+#+end_src
+
+*** hosts
+
+**** Rick
+#+begin_src nix :mkdirp yes :tangle data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup/hosts/Rick.nix
+{ ... }: {
+
+  # Root file system and bootloader is required for CI to build system configuration
+  boot.loader.grub.devices = [ "nodev" ];
+  fileSystems."/" = { device = "test"; fsType = "ext4"; };
+
+  # not ideal to have this in host right???
+  users = {
+    mutableUsers = false;
+    users.morty = {
+      password = "hunter2";
+      extraGroups = [ "wheel" ];
+      isNormalUser = true;
+    };
+    users.root.password = "root";
+  };
+
+  home-manager = {
+
+    useGlobalPkgs = true;
+    useUserPackages = true;
+
+    sharedModules =  [];
+
+    users.morty = {
+      home.username = "morty";
+      home.file = {
+        "testfile".text = '' this is a test '';
+      };
+      home.homeDirectory = "/home/morty";
+      home.stateVersion = "21.05";
+
+      programs.home-manager.enable = true;
+      services.spotifyd.enable = true;
+
+      imports = [ homeage.homeManagerModules.homeage ];
+
+      homeage.file."pijulsecretkey" = {
+        source = ./secretkey.json.age;
+        path = "pijul/secretkey.json";
+        symlinks = [ "/home/morty/pijul/secretkey.json" ];
+      };
+
+    };
+  };
+}
+#+end_src
+
+*** modules
+
+**** sharedConfigurationBetweenHosts.nix
+
+#+begin_src nix :mkdirp yes :tangle data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup/modules/sharedConfigurationBetweenHosts.nix
+{ ... }: {
+  # Root file system and bootloader is required for CI to build system configuration
+  boot.loader.grub.devices = [ "nodev" ];
+  fileSystems."/" = { device = "test"; fsType = "ext4"; };
+}
+#+end_src
+
+*** overlays
+
+**** default.nix
+
+#+begin_src nix :mkdirp yes :tangle data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup/overlays/default.nix
+final: prev: { }
+#+end_src
+
+*** building
+
+**** init git repo and add things
+
+#+begin_src sh :dir data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup/
+git init && git add .
+#+end_src
+
+**** build and start VM
+
+#+begin_src sh :dir data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup/
+nixos-rebuild build-vm --flake .#Rick && ./result/bin/run-Rick-vm  && rm -v result Rick.qcow2
+#+end_src
+
+**** example session
+
+***** tangle from emacs
+
+***** then run those commands in the correct data directory
+
+#+begin_src sh :eval no
+[pod@razer:~/flake-variations-from-scratch/data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup]$ git init && git add .
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: is subject to change. To configure the initial branch name to use in all
+hint: of your new repositories, which will suppress this warning, call:
+hint: 
+hint: 	git config --global init.defaultBranch <name>
+hint: 
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint: 
+hint: 	git branch -m <name>
+Initialized empty Git repository in /home/pod/flake-variations-from-scratch/data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup/.git/
+
+[pod@razer:~/flake-variations-from-scratch/data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup]$ nixos-rebuild build-vm --flake .#Rick && ./result/bin/run-Rick-vm  && rm -v result Rick.qcow2
+building the system configuration...
+warning: Git tree '/home/pod/flake-variations-from-scratch/data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup' is dirty
+warning: creating lock file '/home/pod/flake-variations-from-scratch/data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup/flake.lock'
+warning: Git tree '/home/pod/flake-variations-from-scratch/data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup' is dirty
+error: undefined variable 'specialArgs'
+
+       at /nix/store/bjfx56dkw122hrk9jbpkjyr3xbinisbf-source/hosts/Rick.nix:19:24:
+
+           18|   home-manager = {
+           19|     extraSpecialArgs = specialArgs;
+             |                        ^
+           20|
+(use '--show-trace' to show detailed location information)
+
+[pod@razer:~/flake-variations-from-scratch/data/fd/95465e-2846-4a45-8359-15212d2a8df1/example-homeage-with-fup]$ nixos-rebuild build-vm --flake .#Rick && ./result/bin/run-Rick-vm  && rm -v result Rick.qcow2
+building the system configuration...
+#+end_src
+
+
