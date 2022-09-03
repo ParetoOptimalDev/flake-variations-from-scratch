@@ -57,6 +57,8 @@ error: undefined variable 'homeage'
         ./modules/sharedConfigurationBetweenHosts.nix
       ];
 
+      imports = [ inputs.homeage.homeManagerModules.homeage ];
+
       hosts.Rick.modules = [
         ./hosts/Rick.nix
       ];
